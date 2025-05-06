@@ -1,51 +1,135 @@
 <!---
 {
-  "depends_on": [],
+  "id": "a4b0b901-5c73-48b4-9eb8-5cedc4d8c67b",
+  "depends_on": ["a0f6c77d-9645-4e6c-80dc-a80608786266","2d1d315d-bb92-48c0-b19f-19529a45e5ff","b9e34253-61e2-4fb7-bd36-388c370fa765"],
   "author": "Stephan Bökelmann",
-  "first_used": "2025-03-17",
-  "keywords": ["learning", "exercises", "education", "practice"]
+  "first_used": "2025-05-06",
+  "keywords": ["systemd", "python", "http.server", "virtualenv", "unit files"]
 }
 --->
 
-# Learning Through Exercises
+# Running Python Services with `systemd`
 
-## Introduction
-Learning by doing is one of the most effective methods to acquire new knowledge and skills. Rather than passively consuming information, actively engaging in problem-solving fosters deeper understanding and long-term retention. By working through structured exercises, students can grasp complex concepts in a more intuitive and applicable way. This approach is particularly beneficial in technical fields like programming, mathematics, and engineering.
+> In this exercise you will learn how to run Python-based tasks as persistent services using `systemd`. Furthermore we will explore how to define services that use a Python virtual environment.
+
+### Introduction
+
+Linux services are not limited to compiled daemons or scripts written in Bash. Many tasks you’d like to run on boot — such as serving a static website or continuously monitoring a directory — are perfectly suitable for implementation in Python. With `systemd`, you can easily manage these Python scripts as full-fledged services.
+
+In this exercise, you will first run a static website using Python’s built-in HTTP server under `~/static_website/`. Then, you'll set up a second service that executes a Python script using a dedicated virtual environment. This teaches you how to use `ExecStart` to activate environments and keep Python services isolated and maintainable. Learning how to correctly configure environment paths and permissions is a key takeaway.
+
+By the end of this exercise, you will have created two services that are automatically started on boot, logged by the journal, and can be restarted or stopped on demand using standard `systemctl` commands.
 
 ### Further Readings and Other Sources
-- [The Importance of Practice in Learning](https://www.sciencedirect.com/science/article/pii/S036013151300062X)
-- "The Art of Learning" by Josh Waitzkin
-- [How to Learn Effectively: 5 Key Strategies](https://www.edutopia.org/article/5-research-backed-learning-strategies)
 
-## Tasks
-1. **Write a Summary**: Summarize the concept of "learning by doing" in 3-5 sentences.
-2. **Example Identification**: List three examples from your own experience where learning through exercises helped you understand a topic better.
-3. **Create an Exercise**: Design a simple exercise for a topic of your choice that someone else could use to practice.
-4. **Follow an Exercise**: Find an online tutorial that includes exercises and complete at least two of them.
-5. **Modify an Existing Exercise**: Take a basic problem from a textbook or online course and modify it to make it slightly more challenging.
-6. **Pair Learning**: Explain a concept to a partner and guide them through an exercise without giving direct answers.
-7. **Review Mistakes**: Look at an exercise you've previously completed incorrectly. Identify why the mistake happened and how to prevent it in the future.
-8. **Time Challenge**: Set a timer for 10 minutes and try to solve as many simple exercises as possible on a given topic.
-9. **Self-Assessment**: Create a checklist to evaluate your own performance in completing exercises effectively.
-10. **Reflect on Progress**: Write a short paragraph on how this structured approach to exercises has influenced your learning.
+* [Python HTTP server module](https://docs.python.org/3/library/http.server.html)
+* [DigitalOcean: How To Use Systemctl](https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units)
+* [Arch Wiki: Python Virtual Environments](https://wiki.archlinux.org/title/Python/Virtual_environment)
+* [Red Hat Developer Blog: Run your Python application as a systemd service](https://developers.redhat.com/blog/2021/09/21/how-to-run-your-python-applications-as-a-systemd-service)
 
-<details>
-  <summary>Tip for Task 5</summary>
-  Try making small adjustments first, such as increasing the difficulty slightly or adding an extra constraint.
-</details>
+---
 
-## Questions
-1. What are the main benefits of learning through exercises compared to passive learning?
-2. How do exercises improve long-term retention?
-3. Can you think of a subject where learning through exercises might be less effective? Why?
-4. What role does feedback play in learning through exercises?
-5. How can self-designed exercises improve understanding?
-6. Why is it beneficial to review past mistakes in exercises?
-7. How does explaining a concept to someone else reinforce your own understanding?
-8. What strategies can you use to stay motivated when practicing with exercises?
-9. How can timed challenges contribute to learning efficiency?
-10. How do exercises help bridge the gap between theory and practical application?
+### Tasks
 
-## Advice
-Practice consistently and seek out diverse exercises that challenge different aspects of a topic. Combine exercises with reflection and feedback to maximize your learning efficiency. Don't hesitate to adapt exercises to fit your own needs and ensure that you're actively engaging with the material, rather than just going through the motions.
+#### 1. Python HTTP Server as a Service
 
+Ensure the directory exists and has content:
+
+```sh
+mkdir -p ~/static_website
+echo "<h1>Hello from systemd!</h1>" > ~/static_website/index.html
+```
+
+Create a unit file at `~/.config/systemd/user/httpserver.service`:
+
+```ini
+[Unit]
+Description=Python Simple HTTP Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 8080 --directory=/home/YOUR_USERNAME/static_website
+Restart=always
+
+[Install]
+WantedBy=default.target
+```
+
+Replace `YOUR_USERNAME` with your actual username.
+
+Then enable and start the service:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable httpserver.service
+systemctl --user start httpserver.service
+```
+
+Check status and access the site at [http://localhost:8080](http://localhost:8080).
+
+#### 2. Python Script with Virtual Environment
+
+Create the Python project:
+
+```sh
+mkdir -p ~/my_py_service
+cd ~/my_py_service
+python3 -m venv venv
+source venv/bin/activate
+pip install requests
+```
+
+Create `script.py`:
+
+```python
+# ~/my_py_service/script.py
+import time
+import requests
+
+while True:
+    r = requests.get("https://example.com")
+    with open("output.txt", "a") as f:
+        f.write(f"Fetched at {time.ctime()}: {r.status_code}\n")
+    time.sleep(300)
+```
+
+Create a unit file at `~/.config/systemd/user/mypyservice.service`:
+
+```ini
+[Unit]
+Description=Python Script with venv
+After=network.target
+
+[Service]
+WorkingDirectory=/home/YOUR_USERNAME/my_py_service
+ExecStart=/home/YOUR_USERNAME/my_py_service/venv/bin/python script.py
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Again, replace `YOUR_USERNAME` with your actual username.
+
+Enable and start the service:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable mypyservice.service
+systemctl --user start mypyservice.service
+```
+
+---
+
+### Questions
+
+1. Why is `--directory` used in the `http.server` service?
+2. What is the purpose of a virtual environment in Python?
+3. How does `systemd` know to restart a failed service?
+4. How does `systemctl --user` differ from system-wide service management?
+
+---
+
+### Advice
+
+Running Python applications as services offers convenience and reliability. Using `systemctl --user` avoids the need for root access and is ideal for per-user services. Always use absolute paths in your unit files and test your script manually before deploying it under `systemd`. For virtual environments, ensure paths are correct and environment dependencies are frozen for reproducibility. If your script needs to communicate with other system components, consider extending this with environment variables or socket activation in a future exercise.
